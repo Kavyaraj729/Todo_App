@@ -1,37 +1,46 @@
-import express from "express"
-import mongoose from "mongoose"
-import cors from "cors"
-import dotenv from "dotenv"
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import serverless from "serverless-http";
 
-import userRouter from "./routes/userRoute.js"
-import taskRouter from "./routes/taskRoute.js"
-import forgotPasswordRouter from "./routes/forgotPassword.js"
+import sequelize, { initDb } from "./config/db.js";
+import userRouter from "./routes/userRoute.js";
+import taskRouter from "./routes/taskRoute.js";
+import forgotPasswordRouter from "./routes/forgotPassword.js";
 
-//app config
-dotenv.config()
-const app = express()
-const port = process.env.PORT || 8001
-mongoose.set('strictQuery', true);
+dotenv.config();
 
-//middlewares
-app.use(express.json())
-app.use(cors())
+const app = express();
 
-//db config
-mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-}, (err) => {
-    if (err) {
-        console.log(err)
-    } else {
-        console.log("DB Connected")
+app.use(express.json());
+app.use(cors());
+
+app.use("/api/user", userRouter);
+app.use("/api/task", taskRouter);
+app.use("/api/forgotPassword", forgotPasswordRouter);
+
+let dbInitialized = false;
+
+async function initializeDatabase() {
+    if (dbInitialized) {
+        return;
     }
-})
 
-//api endpoints
-app.use("/api/user", userRouter)
-app.use("/api/task", taskRouter)
-app.use("/api/forgotPassword", forgotPasswordRouter)
+    await initDb();
 
-//listen
-app.listen(port, () => console.log(`Listening on localhost:${port}`))
+    await sequelize.sync();
+
+    console.log("Database synchronized");
+
+    dbInitialized = true;
+}
+
+const server = serverless(app);
+
+export const handler = async (event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+
+    await initializeDatabase();
+
+    return server(event, context);
+};
